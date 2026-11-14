@@ -41,9 +41,8 @@ def is_directory_link(path: Path) -> bool:
 
 def create_directory_link(link: Path, target: Path) -> None:
     if os.name == "nt":
-        command = f'mklink /J "{link}" "{target}"'
         result = subprocess.run(
-            ["cmd.exe", "/d", "/v:off", "/c", command],
+            ["cmd.exe", "/d", "/v:off", "/c", "mklink", "/J", str(link), str(target)],
             capture_output=True,
             text=True,
         )

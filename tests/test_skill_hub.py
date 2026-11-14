@@ -28,7 +28,7 @@ def skill(path: Path, name: str, body: str = "Shared instructions") -> None:
 
 class SkillHubTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(prefix="skill hub test ")
         self.home = Path(self.temp.name)
 
     def tearDown(self) -> None:
