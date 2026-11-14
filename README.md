@@ -17,10 +17,14 @@ The installer moves each tool's **original directory into a dated backup**, copi
 Requires macOS or Linux and Python 3.10 or newer. Clone this repository, then run:
 
 ```sh
+git clone https://github.com/greinald/skill-hub.git
+cd skill-hub
 python3 skill_hub.py plan
 python3 skill_hub.py install
 python3 skill_hub.py verify
 ```
+
+The repository is currently private, so cloning requires access to it. No personal skill files are included in this repository.
 
 `plan` checks for name collisions and shows what will be copied before anything changes. If two directories contain different entries with the same name, installation stops and names both paths. Resolve the conflict yourself; Skill Hub never chooses a version silently.
 
