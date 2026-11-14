@@ -42,12 +42,16 @@ def is_directory_link(path: Path) -> bool:
 def create_directory_link(link: Path, target: Path) -> None:
     if os.name == "nt":
         command = f'mklink /J "{link}" "{target}"'
-        subprocess.run(
+        result = subprocess.run(
             ["cmd.exe", "/d", "/v:off", "/c", command],
-            check=True,
             capture_output=True,
             text=True,
         )
+        if result.returncode:
+            raise OSError(
+                f"mklink failed for {link}: "
+                f"{result.stdout.strip()} {result.stderr.strip()}"
+            )
         if not is_junction(link) or link.resolve() != target.resolve():
             if is_junction(link):
                 link.rmdir()
