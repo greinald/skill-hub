@@ -24,7 +24,7 @@ python3 skill_hub.py install
 python3 skill_hub.py verify
 ```
 
-The repository is currently private, so cloning requires access to it. No personal skill files are included in this repository.
+This repository contains only the installer, tests, and documentation. No personal skill files are included.
 
 `plan` checks for name collisions and shows what will be copied before anything changes. If two directories contain different entries with the same name, installation stops and names both paths. Resolve the conflict yourself; Skill Hub never chooses a version silently.
 
