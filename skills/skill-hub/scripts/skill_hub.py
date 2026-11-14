@@ -11,6 +11,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -24,6 +25,133 @@ ROOTS = (
     ".gemini/antigravity/skills",
 )
 IGNORED = {".DS_Store"}
+INSTRUCTION_FILES = (
+    ".codex/AGENTS.md",
+    ".claude/CLAUDE.md",
+    ".gemini/GEMINI.md",
+)
+POLICIES = {"disk-hygiene", "tool-economy"}
+
+
+def policy_markers(name: str) -> tuple[str, str]:
+    if name not in POLICIES:
+        raise ValueError(f"Unknown policy: {name}")
+    return f"<!-- skill-hub:{name}:start -->", f"<!-- skill-hub:{name}:end -->"
+
+
+def policy_block(name: str) -> str:
+    start, end = policy_markers(name)
+    policy = Path(__file__).resolve().parent.parent / "references" / f"{name}.md"
+    return f"{start}\n{policy.read_text(encoding='utf-8').rstrip()}\n{end}"
+
+
+def write_text_atomic(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.",
+        delete=False,
+    ) as temporary:
+        temporary.write(content)
+        staged = Path(temporary.name)
+    try:
+        if original_mode is not None:
+            staged.chmod(original_mode)
+        staged.replace(path)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def policy_span(content: str, name: str) -> tuple[int, int] | None:
+    start_marker, end_marker = policy_markers(name)
+    label = name.replace("-", " ")
+    starts = content.count(start_marker)
+    ends = content.count(end_marker)
+    if starts != ends or starts > 1:
+        raise ValueError(f"Malformed {label} block; resolve it manually")
+    if not starts:
+        return None
+    start = content.index(start_marker)
+    end = content.index(end_marker) + len(end_marker)
+    if content.index(end_marker) <= start:
+        raise ValueError(f"Malformed {label} block; resolve it manually")
+    return start, end
+
+
+def policy_install(home: Path, name: str) -> None:
+    block = policy_block(name)
+    prepared = []
+    for relative in INSTRUCTION_FILES:
+        path = home / relative
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise ValueError(f"Instruction path is not a file: {path}")
+        current = path.read_text(encoding="utf-8") if path.exists() else ""
+        span = policy_span(current, name)
+        if span is None:
+            updated = current.rstrip("\n") + ("\n\n" if current else "") + block + "\n"
+        else:
+            updated = current[:span[0]] + block + current[span[1]:]
+        prepared.append((path, updated))
+    for path, updated in prepared:
+        write_text_atomic(path, updated)
+        print(f"Installed {name} rule: {path}")
+
+
+def policy_verify(home: Path, name: str) -> bool:
+    block = policy_block(name)
+    okay = True
+    for relative in INSTRUCTION_FILES:
+        path = home / relative
+        try:
+            content = path.read_text(encoding="utf-8")
+            span = policy_span(content, name)
+            valid = span is not None and content[span[0]:span[1]] == block
+        except (OSError, ValueError):
+            valid = False
+        print(f"{'OK' if valid else 'FAIL'}  {path}")
+        okay = okay and valid
+    return okay
+
+
+def policy_remove(home: Path, name: str) -> None:
+    prepared = []
+    for relative in INSTRUCTION_FILES:
+        path = home / relative
+        if path.is_symlink():
+            raise ValueError(f"Instruction path is a symlink: {path}")
+        if not path.exists():
+            continue
+        if not path.is_file():
+            raise ValueError(f"Instruction path is not a file: {path}")
+        current = path.read_text(encoding="utf-8")
+        span = policy_span(current, name)
+        if span is None:
+            continue
+        start, end = span
+        prefix = current[:start]
+        suffix = current[end:]
+        updated = prefix.rstrip("\n") + suffix
+        if updated and not updated.endswith("\n"):
+            updated += "\n"
+        prepared.append((path, updated))
+    for path, updated in prepared:
+        if updated.strip():
+            write_text_atomic(path, updated)
+        else:
+            path.unlink()
+        print(f"Removed {name} rule: {path}")
+
+
+def hygiene_install(home: Path) -> None:
+    policy_install(home, "disk-hygiene")
+
+
+def hygiene_verify(home: Path) -> bool:
+    return policy_verify(home, "disk-hygiene")
+
+
+def hygiene_remove(home: Path) -> None:
+    policy_remove(home, "disk-hygiene")
 
 
 def is_junction(path: Path) -> bool:
@@ -237,7 +365,11 @@ def restore(home: Path, backup: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=("plan", "install", "verify", "restore")
+        "command", choices=(
+            "plan", "install", "verify", "restore",
+            "hygiene-install", "hygiene-verify", "hygiene-remove",
+            "economy-install", "economy-verify", "economy-remove",
+        )
     )
     parser.add_argument("--home", type=Path, default=Path.home(), help=argparse.SUPPRESS)
     parser.add_argument("--backup", type=Path, help="Backup path printed by install")
@@ -254,10 +386,22 @@ def main() -> int:
             install(args.home)
         elif args.command == "verify":
             return 0 if verify(args.home) else 1
-        else:
+        elif args.command == "restore":
             if args.backup is None:
                 parser.error("restore requires --backup")
             restore(args.home, args.backup)
+        elif args.command == "hygiene-install":
+            hygiene_install(args.home)
+        elif args.command == "hygiene-verify":
+            return 0 if hygiene_verify(args.home) else 1
+        elif args.command == "hygiene-remove":
+            hygiene_remove(args.home)
+        elif args.command == "economy-install":
+            policy_install(args.home, "tool-economy")
+        elif args.command == "economy-verify":
+            return 0 if policy_verify(args.home, "tool-economy") else 1
+        else:
+            policy_remove(args.home, "tool-economy")
     except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

@@ -19,6 +19,14 @@ The migration script is [scripts/skill_hub.py](scripts/skill_hub.py), relative t
 
 The script is idempotent. It covers `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, `~/.gemini/config/skills`, and `~/.gemini/antigravity/skills`. It does not move project-local skills or vendor plugin caches.
 
+## Always-on agent rules
+
+Shared skills load only when selected. To give every task a temporary-file cleanup rule, run `python3 scripts/skill_hub.py hygiene-install`. This adds the same managed block to Codex's `~/.codex/AGENTS.md`, Claude Code's `~/.claude/CLAUDE.md`, and Gemini CLI and Antigravity's `~/.gemini/GEMINI.md`. It preserves instructions outside the block and is safe to rerun.
+
+Run `python3 scripts/skill_hub.py hygiene-verify` to check all three files, or `hygiene-remove` to remove only Skill Hub's block. The rule is in [references/disk-hygiene.md](references/disk-hygiene.md). It directs agents to remove their own disposable task files while preserving deliverables and existing data. Running agents may need a restart to load the new rule.
+
+For targeted commands and lower tool-output token use, run `python3 scripts/skill_hub.py economy-install`, then `economy-verify`. This installs [references/tool-economy.md](references/tool-economy.md) into the same global files as a separate managed block. `economy-remove` removes that block without changing disk hygiene or other instructions. Large commands remain appropriate when the task requires them.
+
 ## Inspect or undo
 
 - For a status request, run `python3 scripts/skill_hub.py verify`.

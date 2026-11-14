@@ -7,10 +7,16 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/skill-hub/scripts"))
 from skill_hub import (
     create_directory_link,
+    hygiene_install,
+    hygiene_remove,
+    hygiene_verify,
     install,
     is_directory_link,
     is_junction,
     plan,
+    policy_install,
+    policy_remove,
+    policy_verify,
     remove_directory_link,
     restore,
     verify,
@@ -86,6 +92,52 @@ class SkillHubTests(unittest.TestCase):
                 plan(self.home)
         finally:
             remove_directory_link(root)
+
+    def test_hygiene_installs_preserves_existing_and_removes_its_block(self) -> None:
+        codex = self.home / ".codex/AGENTS.md"
+        codex.parent.mkdir(parents=True)
+        codex.write_text("# My existing rules\nKeep this rule.\n", encoding="utf-8")
+
+        hygiene_install(self.home)
+        self.assertTrue(hygiene_verify(self.home))
+        self.assertIn("Keep this rule.", codex.read_text(encoding="utf-8"))
+        for relative in (".codex/AGENTS.md", ".claude/CLAUDE.md", ".gemini/GEMINI.md"):
+            self.assertIn("Delete only files you created for this task", (self.home / relative).read_text())
+
+        first = codex.read_text(encoding="utf-8")
+        hygiene_install(self.home)
+        self.assertEqual(codex.read_text(encoding="utf-8"), first)
+
+        hygiene_remove(self.home)
+        self.assertFalse(hygiene_verify(self.home))
+        self.assertIn("Keep this rule.", codex.read_text(encoding="utf-8"))
+        self.assertFalse((self.home / ".claude/CLAUDE.md").exists())
+        self.assertFalse((self.home / ".gemini/GEMINI.md").exists())
+
+    def test_hygiene_refuses_partial_marker_without_changing_any_file(self) -> None:
+        codex = self.home / ".codex/AGENTS.md"
+        codex.parent.mkdir(parents=True)
+        codex.write_text("<!-- skill-hub:disk-hygiene:start -->\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Malformed disk hygiene block"):
+            hygiene_install(self.home)
+        self.assertFalse((self.home / ".claude/CLAUDE.md").exists())
+
+    def test_tool_economy_installs_and_removes_independently(self) -> None:
+        hygiene_install(self.home)
+        policy_install(self.home, "tool-economy")
+        self.assertTrue(policy_verify(self.home, "tool-economy"))
+        self.assertTrue(hygiene_verify(self.home))
+
+        codex = self.home / ".codex/AGENTS.md"
+        first = codex.read_text(encoding="utf-8")
+        self.assertIn("Run a large or expensive command", first)
+        policy_install(self.home, "tool-economy")
+        self.assertEqual(codex.read_text(encoding="utf-8"), first)
+
+        policy_remove(self.home, "tool-economy")
+        self.assertFalse(policy_verify(self.home, "tool-economy"))
+        self.assertTrue(hygiene_verify(self.home))
+        self.assertNotIn("Run a large or expensive command", codex.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
