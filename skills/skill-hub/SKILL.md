@@ -1,6 +1,6 @@
 ---
 name: skill-hub
-description: Consolidate existing personal Agent Skills for Codex, Claude Code, and Gemini into one shared folder. Use when a user asks to set up, inspect, verify, or undo a shared skills directory across these agents.
+description: Merge scattered personal Agent Skills for Codex, Claude Code, and Gemini into one shared folder, so skills stay in sync without duplicate copies. Use for setup, verification, or restore on Windows, macOS, and Linux.
 ---
 
 # Skill Hub

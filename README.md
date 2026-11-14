@@ -1,6 +1,12 @@
-# Skill Hub
+# Skill Hub: one shared skills folder for Codex, Claude Code, and Gemini
 
-An Agent Skill that helps consolidate existing personal skills for Codex, Claude Code, and Gemini. Ask your agent to set it up; the included script handles the filesystem changes.
+Stop managing separate copies of your AI agent skills. **Skill Hub consolidates existing personal Agent Skills into `~/.agents/skills` and connects Codex, Claude Code, Gemini CLI, and Gemini Antigravity to that folder.** Install it as an Agent Skill and ask your agent to do the migration, or run the Python script yourself on Windows, macOS, or Linux.
+
+## The problem it solves
+
+Each coding agent can save skills in its own directory. After using several agents, the same skill may be copied into multiple folders, while other skills are visible to only one agent. Updating a skill in one place then leaves the other copies stale.
+
+Skill Hub gives those user-level directories one shared destination. **A skill added through a connected agent path appears through the others without making another active copy.** The migration saves your original directories in a dated backup, checks for conflicting names before changing anything, and provides a restore command.
 
 ```text
 ~/.codex/skills ───────────────┐
@@ -10,9 +16,9 @@ An Agent Skill that helps consolidate existing personal skills for Codex, Claude
 ~/.gemini/antigravity/skills ──┘
 ```
 
-The standard [Skills CLI](https://github.com/vercel-labs/skills) already installs new skills into a canonical location and links them to agents. Skill Hub handles the skills people installed separately **before** using that workflow. Its installer moves each tool's original directory into a dated backup, copies its entries into the shared directory, and replaces the original directory with a symlink (macOS/Linux) or directory junction (Windows). It does not download, publish, or modify the contents of your skills.
+On macOS and Linux, the connections are symlinks. On Windows, they are directory junctions. The [Skills CLI](https://github.com/vercel-labs/skills) already supports canonical installs for new skills; Skill Hub focuses on bringing **existing scattered skill folders** together. It does not upload or publish your skills.
 
-## Ask your agent
+## Install with your AI agent
 
 In Codex, Claude Code, or Gemini, paste:
 
@@ -23,11 +29,11 @@ Claude Code, and Gemini. Show me the plan, stop if names conflict, keep the
 backup, and verify the links.
 ```
 
-The skill is packaged as `skills/skill-hub/SKILL.md` with its helper at `skills/skill-hub/scripts/skill_hub.py`. The agent can install it with `npx skills add greinald/skill-hub --skill skill-hub -g` or its own skill installer. Once linked, new skills installed through any of the covered agent paths land in the shared directory.
+The agent can install the packaged skill with `npx skills add greinald/skill-hub --skill skill-hub -g` or its own skill installer. Its instructions live in `skills/skill-hub/SKILL.md`, with the migration script beside them. Once connected, new skills installed through any covered agent path land in the shared directory.
 
 This repository contains only the installer, skill instructions, tests, and documentation. No personal skill files are included.
 
-## Manual setup
+## Install manually
 
 Requires Python 3.10 or newer. On macOS or Linux:
 
