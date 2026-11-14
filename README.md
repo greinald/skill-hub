@@ -10,7 +10,7 @@ An Agent Skill that helps consolidate existing personal skills for Codex, Claude
 ~/.gemini/antigravity/skills ──┘
 ```
 
-The standard [Skills CLI](https://github.com/vercel-labs/skills) already installs new skills into a canonical location and links them to agents. Skill Hub handles the skills people installed separately **before** using that workflow. Its installer moves each tool's original directory into a dated backup, copies its entries into the shared directory, and replaces the original directory with a symbolic link. It does not download, publish, or modify the contents of your skills.
+The standard [Skills CLI](https://github.com/vercel-labs/skills) already installs new skills into a canonical location and links them to agents. Skill Hub handles the skills people installed separately **before** using that workflow. Its installer moves each tool's original directory into a dated backup, copies its entries into the shared directory, and replaces the original directory with a symlink (macOS/Linux) or directory junction (Windows). It does not download, publish, or modify the contents of your skills.
 
 ## Ask your agent
 
@@ -29,7 +29,7 @@ This repository contains only the installer, skill instructions, tests, and docu
 
 ## Manual setup
 
-Requires macOS or Linux and Python 3.10 or newer:
+Requires Python 3.10 or newer. On macOS or Linux:
 
 ```sh
 git clone https://github.com/greinald/skill-hub.git
@@ -37,6 +37,16 @@ cd skill-hub
 python3 skill_hub.py plan
 python3 skill_hub.py install
 python3 skill_hub.py verify
+```
+
+On Windows in PowerShell:
+
+```powershell
+git clone https://github.com/greinald/skill-hub.git
+cd skill-hub
+py -3 skill_hub.py plan
+py -3 skill_hub.py install
+py -3 skill_hub.py verify
 ```
 
 `plan` checks for name collisions and shows what will be copied before anything changes. If two directories contain different entries with the same name, installation stops and names both paths. Resolve the conflict yourself; Skill Hub never chooses a version silently. The install command prints the backup path. Keep it until you have restarted your agents and confirmed their skill lists. Running `install` again is safe.
@@ -57,7 +67,7 @@ This handles user-level skill directories. Project-local skills remain in their 
 
 This is a filesystem setup tool. It does not make a Claude-specific skill compatible with Codex or Gemini: a shared `SKILL.md` may mention tools that only one agent has. Review a skill's instructions before expecting it to work in every agent. Restart Codex and Claude after installing; Gemini CLI can refresh with `/skills reload`.
 
-The current version is for macOS and Linux. Windows needs a separate implementation because creating directory links has different permissions and behavior.
+Windows uses directory junctions, which do not require Developer Mode or administrator rights. The same backup and restore behavior applies on all three systems. The test suite runs on macOS, Ubuntu, and Windows with Python 3.10 and 3.13 in GitHub Actions.
 
 ## Test
 

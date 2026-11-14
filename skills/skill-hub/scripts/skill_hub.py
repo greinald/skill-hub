@@ -8,6 +8,8 @@ import filecmp
 import json
 import os
 import shutil
+import stat
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,8 +26,45 @@ ROOTS = (
 IGNORED = {".DS_Store"}
 
 
+def is_junction(path: Path) -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return path.lstat().st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT
+    except (FileNotFoundError, AttributeError):
+        return False
+
+
+def is_directory_link(path: Path) -> bool:
+    return path.is_symlink() or is_junction(path)
+
+
+def create_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        command = f'mklink /J "{link}" "{target}"'
+        subprocess.run(
+            ["cmd.exe", "/d", "/v:off", "/c", command],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if not is_junction(link) or link.resolve() != target.resolve():
+            if is_junction(link):
+                link.rmdir()
+            raise OSError(f"Failed to create a junction from {link} to {target}")
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def remove_directory_link(link: Path) -> None:
+    if is_junction(link):
+        link.rmdir()
+    else:
+        link.unlink()
+
+
 def same_tree(left: Path, right: Path) -> bool:
-    if left.is_symlink() or right.is_symlink():
+    if is_directory_link(left) or is_directory_link(right):
         return same_tree(left.resolve(strict=True), right.resolve(strict=True))
     if left.is_dir() != right.is_dir():
         return False
@@ -44,14 +83,14 @@ def paths(home: Path) -> tuple[Path, list[Path]]:
 
 def plan(home: Path) -> tuple[Path, list[Path], list[tuple[Path, Path]]]:
     hub, roots = paths(home)
-    if hub.is_symlink() or (hub.exists() and not hub.is_dir()):
+    if is_directory_link(hub) or (hub.exists() and not hub.is_dir()):
         raise ValueError(f"Shared path must be a real directory: {hub}")
     additions: list[tuple[Path, Path]] = []
     candidates: dict[str, Path] = {
         child.name: child for child in hub.iterdir()
     } if hub.exists() else {}
     for root in roots:
-        if root.is_symlink():
+        if is_directory_link(root):
             if root.resolve(strict=True) != hub.resolve():
                 raise ValueError(f"Skill path already links elsewhere: {root}")
             continue
@@ -77,7 +116,7 @@ def plan(home: Path) -> tuple[Path, list[Path], list[tuple[Path, Path]]]:
 
 def install(home: Path) -> Path | None:
     hub, roots, additions = plan(home)
-    pending = [root for root in roots if not root.is_symlink()]
+    pending = [root for root in roots if not is_directory_link(root)]
     if not pending and not additions:
         print(f"Already installed: {hub}")
         return None
@@ -94,8 +133,12 @@ def install(home: Path) -> Path | None:
     try:
         for source, target in additions:
             added.append(target)
-            if source.is_symlink():
-                target.symlink_to(source.resolve(strict=True), target_is_directory=True)
+            if is_directory_link(source):
+                resolved = source.resolve(strict=True)
+                if resolved.is_dir():
+                    create_directory_link(target, resolved)
+                else:
+                    shutil.copy2(resolved, target)
             elif source.is_dir():
                 shutil.copytree(source, target, symlinks=True)
             else:
@@ -108,7 +151,7 @@ def install(home: Path) -> Path | None:
                 archived.parent.mkdir(parents=True, exist_ok=True)
                 root.rename(archived)
                 moved.append((root, archived))
-            root.symlink_to(hub, target_is_directory=True)
+            create_directory_link(root, hub)
             linked.append(root)
 
         manifest = {
@@ -125,13 +168,15 @@ def install(home: Path) -> Path | None:
         )
     except Exception:
         for root in reversed(linked):
-            if root.is_symlink():
-                root.unlink()
+            if is_directory_link(root):
+                remove_directory_link(root)
         for root, archived in reversed(moved):
             archived.rename(root)
         for target in reversed(added):
-            if target.is_symlink() or target.is_file():
-                target.unlink(missing_ok=True)
+            if is_directory_link(target):
+                remove_directory_link(target)
+            elif target.is_file():
+                target.unlink()
             elif target.is_dir():
                 shutil.rmtree(target)
         if hub_created and not any(hub.iterdir()):
@@ -147,12 +192,12 @@ def install(home: Path) -> Path | None:
 
 def verify(home: Path) -> bool:
     hub, roots = paths(home)
-    if not hub.is_dir() or hub.is_symlink():
+    if not hub.is_dir() or is_directory_link(hub):
         print(f"Missing real shared directory: {hub}")
         return False
     okay = True
     for root in roots:
-        valid = root.is_symlink() and root.resolve() == hub.resolve()
+        valid = is_directory_link(root) and root.resolve() == hub.resolve()
         print(f"{'OK' if valid else 'FAIL'}  {root}")
         okay = okay and valid
     print(f"Direct skill folders: {sum((p / 'SKILL.md').is_file() for p in hub.iterdir())}")
@@ -173,13 +218,13 @@ def restore(home: Path, backup: Path) -> None:
         raise ValueError("Backup lists an unexpected skill path")
     for item in manifest["roots"]:
         root = Path(item["path"])
-        if not root.is_symlink() or root.resolve() != hub.resolve():
+        if not is_directory_link(root) or root.resolve() != hub.resolve():
             raise ValueError(f"Expected shared link, found something else: {root}")
         if item["had_directory"] and not (backup / root.relative_to(home)).is_dir():
             raise ValueError(f"Original folder missing from backup: {root}")
     for item in manifest["roots"]:
         root = Path(item["path"])
-        root.unlink()
+        remove_directory_link(root)
         if item["had_directory"]:
             (backup / root.relative_to(home)).rename(root)
         print(f"Restored {root}")
@@ -198,7 +243,7 @@ def main() -> int:
         if args.command == "plan":
             hub, roots, additions = plan(args.home)
             print(f"Shared directory: {hub}")
-            print(f"Paths to link: {sum(not p.is_symlink() for p in roots)}")
+            print(f"Paths to link: {sum(not is_directory_link(p) for p in roots)}")
             print(f"Entries to copy: {len(additions)}")
             for source, target in additions:
                 print(f"  {source} -> {target}")
@@ -210,7 +255,7 @@ def main() -> int:
             if args.backup is None:
                 parser.error("restore requires --backup")
             restore(args.home, args.backup)
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     return 0

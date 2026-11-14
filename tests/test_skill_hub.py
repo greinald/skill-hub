@@ -1,10 +1,20 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/skill-hub/scripts"))
-from skill_hub import install, plan, restore, verify
+from skill_hub import (
+    create_directory_link,
+    install,
+    is_directory_link,
+    is_junction,
+    plan,
+    remove_directory_link,
+    restore,
+    verify,
+)
 
 
 def skill(path: Path, name: str, body: str = "Shared instructions") -> None:
@@ -34,6 +44,10 @@ class SkillHubTests(unittest.TestCase):
         backup = install(self.home)
         self.assertIsNotNone(backup)
         self.assertTrue(verify(self.home))
+        if os.name == "nt":
+            self.assertTrue(is_junction(codex))
+        else:
+            self.assertTrue(codex.is_symlink())
         shared = self.home / ".agents/skills/alpha/SKILL.md"
         self.assertTrue(shared.samefile(codex / "alpha/SKILL.md"))
         self.assertTrue(shared.samefile(claude / "alpha/SKILL.md"))
@@ -43,9 +57,9 @@ class SkillHubTests(unittest.TestCase):
         self.assertTrue((codex / "new-skill/SKILL.md").exists())
         self.assertIsNone(install(self.home))
         restore(self.home, backup)
-        self.assertFalse(codex.is_symlink())
-        self.assertFalse(claude.is_symlink())
-        self.assertFalse(gemini.is_symlink())
+        self.assertFalse(is_directory_link(codex))
+        self.assertFalse(is_directory_link(claude))
+        self.assertFalse(is_directory_link(gemini))
         self.assertTrue((codex / "alpha/SKILL.md").exists())
         self.assertTrue((claude / "beta/SKILL.md").exists())
         self.assertTrue((gemini / "alpha/SKILL.md").exists())
@@ -66,9 +80,12 @@ class SkillHubTests(unittest.TestCase):
         target.mkdir()
         root = self.home / ".claude/skills"
         root.parent.mkdir()
-        root.symlink_to(target, target_is_directory=True)
-        with self.assertRaisesRegex(ValueError, "links elsewhere"):
-            plan(self.home)
+        create_directory_link(root, target)
+        try:
+            with self.assertRaisesRegex(ValueError, "links elsewhere"):
+                plan(self.home)
+        finally:
+            remove_directory_link(root)
 
 
 if __name__ == "__main__":
