@@ -1,6 +1,6 @@
 # Skill Hub
 
-Keep your personal Agent Skills in one folder while Codex, Claude Code, and Gemini continue using their usual skill paths.
+An Agent Skill that helps consolidate existing personal skills for Codex, Claude Code, and Gemini. Ask your agent to set it up; the included script handles the filesystem changes.
 
 ```text
 ~/.codex/skills ───────────────┐
@@ -10,11 +10,26 @@ Keep your personal Agent Skills in one folder while Codex, Claude Code, and Gemi
 ~/.gemini/antigravity/skills ──┘
 ```
 
-The installer moves each tool's **original directory into a dated backup**, copies its entries into the shared directory, and replaces the original directory with a symbolic link. A new skill installed through any linked path then lands in the same shared directory. It does not download, publish, or modify the contents of your skills.
+The standard [Skills CLI](https://github.com/vercel-labs/skills) already installs new skills into a canonical location and links them to agents. Skill Hub handles the skills people installed separately **before** using that workflow. Its installer moves each tool's original directory into a dated backup, copies its entries into the shared directory, and replaces the original directory with a symbolic link. It does not download, publish, or modify the contents of your skills.
 
-## Install
+## Ask your agent
 
-Requires macOS or Linux and Python 3.10 or newer. Clone this repository, then run:
+In Codex, Claude Code, or Gemini, paste:
+
+```text
+Install the skill-hub Agent Skill from https://github.com/greinald/skill-hub
+for this agent, then use it to consolidate my personal skills for Codex,
+Claude Code, and Gemini. Show me the plan, stop if names conflict, keep the
+backup, and verify the links.
+```
+
+The skill is packaged as `skills/skill-hub/SKILL.md` with its helper at `skills/skill-hub/scripts/skill_hub.py`. The agent can install it with `npx skills add greinald/skill-hub --skill skill-hub -g` or its own skill installer. Once linked, new skills installed through any of the covered agent paths land in the shared directory.
+
+This repository contains only the installer, skill instructions, tests, and documentation. No personal skill files are included.
+
+## Manual setup
+
+Requires macOS or Linux and Python 3.10 or newer:
 
 ```sh
 git clone https://github.com/greinald/skill-hub.git
@@ -24,11 +39,7 @@ python3 skill_hub.py install
 python3 skill_hub.py verify
 ```
 
-This repository contains only the installer, tests, and documentation. No personal skill files are included.
-
-`plan` checks for name collisions and shows what will be copied before anything changes. If two directories contain different entries with the same name, installation stops and names both paths. Resolve the conflict yourself; Skill Hub never chooses a version silently.
-
-The install command prints the backup path. Keep it until you have restarted your agents and confirmed their skill lists. Running `install` again is safe and reports that the links are already installed.
+`plan` checks for name collisions and shows what will be copied before anything changes. If two directories contain different entries with the same name, installation stops and names both paths. Resolve the conflict yourself; Skill Hub never chooses a version silently. The install command prints the backup path. Keep it until you have restarted your agents and confirmed their skill lists. Running `install` again is safe.
 
 ## Restore
 
